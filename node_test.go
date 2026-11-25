@@ -2,29 +2,52 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"net"
 	"testing"
 )
 
-func TestSETCmd(t *testing.T) {
-	cache := NewCache()
-	go Start(cache)
+const addr = "localhost:6368"
 
-	// Connect to server
-	conn, err := net.Dial("tcp", "localhost:6368")
+func startServer(t *testing.T) *Cache {
+	t.Helper()
+
+	cache := NewCache()
+	l := Start(cache)
+
+	t.Cleanup(func() {
+		l.Close()
+	})
+
+	return cache
+}
+
+func connect(t *testing.T) net.Conn {
+	t.Helper()
+
+	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	return conn
+}
+
+func TestSETCmd(t *testing.T) {
+	cache := startServer(t)
+
+	// Connect to server
+	conn := connect(t)
+
 	// Send SET key value
-	_, err = conn.Write([]byte("SET name \"John Doe\""))
+	_, err := conn.Write([]byte("SET name \"John Doe\""))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	reply, err := bufio.NewReader(conn).ReadString('\n')
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("Error while reading from server. ", err)
 	}
 
 	EXPECTED_REPLY := "OK\n"
@@ -38,13 +61,32 @@ func TestSETCmd(t *testing.T) {
 }
 
 func TestGetCmd(t *testing.T) {
-	t.Error("Not implemented.")
+	cache := startServer(t)
+
+	KEY := "location"
+	VAL := "Vice city"
+
+	cache.Set(KEY, []byte(VAL))
+
+	conn := connect(t)
+
+	// send GET cmd
+	_, err := fmt.Fprintf(conn, "GET %s", KEY)
+	if err != nil {
+		t.Error("Failed to send GET cmd to server. ", err)
+	}
+
+	buffer := make([]byte, 1024)
+	n, err := conn.Read(buffer)
+	if err != nil {
+		t.Error("Failed to get reply from server. ", err)
+	}
+
+	if string(buffer[:n]) != VAL {
+		t.Errorf("Unexpected reply from server. Expected: %q, Got: %q", VAL, string(buffer[:n]))
+	}
 }
 
 func TestDeleteCmd(t *testing.T) {
 	t.Error("Not implemented.")
-}
-
-func TestExistsCmd(t *testing.T) {
-	t.Error("Not implemented")
 }
