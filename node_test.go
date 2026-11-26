@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"net"
 	"testing"
@@ -66,19 +65,20 @@ func TestSETCmd(t *testing.T) {
 	conn := connect(t)
 
 	// Send SET key value
-	_, err := conn.Write([]byte("SET name \"John Doe\""))
+	// _, err := conn.Write([]byte("SET name \"John Doe\""))
+	err := send(t, conn, []byte("SET name \"John Doe\""))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	reply, err := bufio.NewReader(conn).ReadString('\n')
+	buffer, err := receive(t, conn)
 	if err != nil {
 		t.Fatal("Error while reading from server. ", err)
 	}
 
-	EXPECTED_REPLY := "OK\n"
-	if reply != EXPECTED_REPLY {
-		t.Errorf("Unexpected reply from server. Expected: %q, Got: %q", EXPECTED_REPLY, reply)
+	expectedReply := "OK"
+	if string(buffer) != expectedReply {
+		t.Errorf("Unexpected reply from server. Expected: %q, Got: %q", expectedReply, buffer)
 	}
 
 	if !cache.Exists("name") {
@@ -104,14 +104,13 @@ func TestGetCmd(t *testing.T) {
 		t.Error("Failed to send GET cmd to server. ", err)
 	}
 
-	buffer := make([]byte, 1024)
-	n, err := conn.Read(buffer)
+	buffer, err := receive(t, conn)
 	if err != nil {
 		t.Error("Failed to get reply from server. ", err)
 	}
 
-	if string(buffer[:n]) != VAL {
-		t.Errorf("Unexpected reply from server. Expected: %q, Got: %q", VAL, string(buffer[:n]))
+	if string(buffer) != VAL {
+		t.Errorf("Unexpected reply from server. Expected: %q, Got: %q", VAL, string(buffer))
 	}
 }
 
@@ -130,8 +129,7 @@ func TestDeleteCmd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	buffer := make([]byte, 1024)
-	_, err = conn.Read(buffer)
+	_, err = receive(t, conn)
 	if err != nil {
 		t.Fatal("Error while receiving data. ", err.Error())
 	}
@@ -148,7 +146,7 @@ func TestExistsCmd(t *testing.T) {
 	conn := connect(t)
 
 	// check for user:100
-	// should return 1
+	// should return TRUE
 	if err := send(t, conn, []byte("EXISTS user:100")); err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +161,7 @@ func TestExistsCmd(t *testing.T) {
 	}
 
 	// check for user:200
-	// should return 0
+	// should return FALSE
 
 	if err := send(t, conn, []byte("EXISTS user:200")); err != nil {
 		t.Fatal(err)

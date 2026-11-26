@@ -67,7 +67,7 @@ func handleConn(c *Cache, conn net.Conn) {
 				conn.Write([]byte("Error while storing data. " + err.Error() + "\n"))
 				return
 			}
-			conn.Write([]byte("OK\n"))
+			conn.Write([]byte("OK"))
 		case "GET":
 			val, err := handleGET(c, input)
 			if err != nil {
