@@ -62,6 +62,7 @@ func handleConn(c *Cache, conn net.Conn) {
 		}
 		conn.Write([]byte("OK\n"))
 	case "GET":
+		//TODO: handle input sanitization
 		key := string(input)
 		val, err := c.Get(key)
 		if err != nil {
@@ -69,6 +70,13 @@ func handleConn(c *Cache, conn net.Conn) {
 			return
 		}
 		conn.Write(val)
+	case "DEL":
+		//TODO: handle input sanitization
+		if err := handleDELETE(c, input); err != nil {
+			conn.Write([]byte("Error while deleting data. " + err.Error() + ""))
+			return
+		}
+		conn.Write([]byte("OK"))
 	default:
 		// TODO: log
 		conn.Write([]byte("Error: Unsupported Command."))
@@ -88,4 +96,11 @@ func handleSET(c *Cache, input []byte) error {
 	c.Set(string(key), value)
 
 	return nil
+}
+
+func handleDELETE(c *Cache, input []byte) error {
+	// TODO: sanitize key
+	key := string(input)
+
+	return c.Delete(key)
 }

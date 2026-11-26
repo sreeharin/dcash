@@ -39,3 +39,14 @@ func (c *Cache) Exists(key string) bool {
 	_, exists := c.entries[key]
 	return exists
 }
+
+func (c *Cache) Delete(key string) error {
+	if c.Exists(key) {
+		c.mu.Lock()
+		delete(c.entries, key)
+		c.mu.Unlock()
+		return nil
+	}
+
+	return errors.New("KEY doesn't exists.")
+}

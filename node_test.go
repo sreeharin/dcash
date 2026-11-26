@@ -88,5 +88,27 @@ func TestGetCmd(t *testing.T) {
 }
 
 func TestDeleteCmd(t *testing.T) {
-	t.Error("Not implemented.")
+	cache := startServer(t)
+
+	KEY := "location"
+	VAL := "Vice city"
+
+	cache.Set(KEY, []byte(VAL))
+
+	conn := connect(t)
+
+	_, err := fmt.Fprintf(conn, "DEL %s", KEY)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	buffer := make([]byte, 1024)
+	_, err = conn.Read(buffer)
+	if err != nil {
+		t.Fatal("Error while receiving data. ", err.Error())
+	}
+
+	if cache.Exists(KEY) {
+		t.Error("Deletion failed, key still exists.")
+	}
 }
