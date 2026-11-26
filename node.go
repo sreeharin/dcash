@@ -62,9 +62,7 @@ func handleConn(c *Cache, conn net.Conn) {
 		}
 		conn.Write([]byte("OK\n"))
 	case "GET":
-		//TODO: handle input sanitization
-		key := string(input)
-		val, err := c.Get(key)
+		val, err := handleGET(c, input)
 		if err != nil {
 			conn.Write([]byte("Error while retrieving data. " + err.Error() + "\n"))
 			return
@@ -96,6 +94,13 @@ func handleSET(c *Cache, input []byte) error {
 	c.Set(string(key), value)
 
 	return nil
+}
+
+func handleGET(c *Cache, input []byte) ([]byte, error) {
+	// TODO: sanitize key
+	key := string(input)
+
+	return c.Get(key)
 }
 
 func handleDELETE(c *Cache, input []byte) error {
