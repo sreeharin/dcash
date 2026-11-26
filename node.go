@@ -61,33 +61,61 @@ func handleConn(c *Cache, conn net.Conn) {
 		switch string(command) {
 		case "SET":
 			if err := handleSET(c, input); err != nil {
-				conn.Write([]byte("Error while storing data. " + err.Error() + "\n"))
+				if _, werr := conn.Write([]byte("Error while storing data. " + err.Error() + "\n")); werr != nil {
+					return
+				}
 				return
 			}
-			conn.Write([]byte("OK\n"))
+			if _, werr := conn.Write([]byte("OK\n")); werr != nil {
+				return
+			}
 		case "GET":
 			val, err := handleGET(c, input)
 			if err != nil {
-				conn.Write([]byte("Error while retrieving data. " + err.Error() + "\n"))
+				if _, werr := conn.Write([]byte("Error while retrieving data. " + err.Error() + "\n")); werr != nil {
+					return
+				}
 				return
 			}
-			conn.Write(val)
+
+			out := make([]byte, len(val)+1)
+			copy(out, val)
+			out[len(val)] = '\n'
+
+			if _, werr := conn.Write(out); werr != nil {
+				return
+			}
 		case "DEL":
 			if err := handleDELETE(c, input); err != nil {
-				conn.Write([]byte("Error while deleting data. " + err.Error() + ""))
+				if _, werr := conn.Write([]byte("Error while deleting data. " + err.Error() + "\n")); werr != nil {
+					return
+				}
 				return
 			}
-			conn.Write([]byte("OK"))
+			if _, werr := conn.Write([]byte("OK\n")); werr != nil {
+				return
+			}
 		case "EXISTS":
 			val, err := handleEXISTS(c, input)
 			if err != nil {
-				conn.Write([]byte("Error while checking key exists. " + err.Error() + ""))
+				if _, werr := conn.Write([]byte("Error while checking key exists. " + err.Error() + "\n")); werr != nil {
+					return
+				}
 				return
 			}
-			conn.Write(val)
+
+			out := make([]byte, len(val)+1)
+			copy(out, val)
+			out[len(val)] = '\n'
+
+			if _, werr := conn.Write(out); werr != nil {
+				return
+			}
 		default:
 			// TODO: log
-			conn.Write([]byte("Error: Unsupported Command."))
+			if _, werr := conn.Write([]byte("Error: Unsupported Command.\n")); werr != nil {
+				return
+			}
 		}
 	}
 }

@@ -106,8 +106,8 @@ func TestGetCmd(t *testing.T) {
 		t.Error("Failed to get reply from server. ", err)
 	}
 
-	if string(buffer) != VAL {
-		t.Errorf("Unexpected reply from server. Expected: %q, Got: %q", VAL, string(buffer))
+	if string(buffer) != VAL+"\n" {
+		t.Errorf("Unexpected reply from server. Expected: %q, Got: %q", VAL+"\n", string(buffer))
 	}
 }
 
@@ -153,8 +153,9 @@ func TestExistsCmd(t *testing.T) {
 		t.Fatal("Error while receiving data from server.", err)
 	}
 
-	if string(buffer) != "TRUE" {
-		t.Errorf("Unexpected value for 'EXISTS user:100'. Expected: %s, Got: %s", "1", string(buffer))
+	expected := "TRUE\n"
+	if string(buffer) != expected {
+		t.Errorf("Unexpected value for 'EXISTS user:100'. Expected: %q, Got: %q", expected, string(buffer))
 	}
 
 	// check for user:200
@@ -169,7 +170,8 @@ func TestExistsCmd(t *testing.T) {
 		t.Fatal("Error while receiving data from server. ", err)
 	}
 
-	if string(buffer) != "FALSE" {
-		t.Errorf("Unexpected value for 'EXISTS user:200'. Expected: %s, Got: %s", "0", string(buffer))
+	expected = "FALSE\n"
+	if string(buffer) != expected {
+		t.Errorf("Unexpected value for 'EXISTS user:200'. Expected: %q, Got: %q", expected, string(buffer))
 	}
 }
