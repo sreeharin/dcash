@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"io"
 	"log"
 	"net"
 )
@@ -39,47 +40,59 @@ func Start(c *Cache) net.Listener {
 func handleConn(c *Cache, conn net.Conn) {
 	defer conn.Close()
 
-	MAX_SIZE := 1024
-	buffer := make([]byte, MAX_SIZE)
-	n, err := conn.Read(buffer)
+	maxSize := 1024
+	buffer := make([]byte, maxSize)
 
-	if err != nil {
-		// TODO: fix logging
-		log.Print(err)
-		return
-	}
+	for {
+		n, err := conn.Read(buffer)
 
-	command, input, found := bytes.Cut(buffer[:n], []byte(" "))
-	if !found {
-		return
-	}
-
-	switch string(command) {
-	case "SET":
-		if err := handleSET(c, input); err != nil {
-			conn.Write([]byte("Error while storing data. " + err.Error() + "\n"))
-			return
-		}
-		conn.Write([]byte("OK\n"))
-	case "GET":
-		val, err := handleGET(c, input)
 		if err != nil {
-			conn.Write([]byte("Error while retrieving data. " + err.Error() + "\n"))
-			return
-		}
-		conn.Write(val)
-	case "DEL":
-		//TODO: handle input sanitization
-		if err := handleDELETE(c, input); err != nil {
-			conn.Write([]byte("Error while deleting data. " + err.Error() + ""))
-			return
-		}
-		conn.Write([]byte("OK"))
-	default:
-		// TODO: log
-		conn.Write([]byte("Error: Unsupported Command."))
-	}
+			// close the connection
+			if errors.Is(err, io.EOF) {
+				return
+			}
 
+			// TODO: fix logging
+			log.Print(err)
+		}
+
+		command, input, found := bytes.Cut(buffer[:n], []byte(" "))
+		if !found {
+			return
+		}
+
+		switch string(command) {
+		case "SET":
+			if err := handleSET(c, input); err != nil {
+				conn.Write([]byte("Error while storing data. " + err.Error() + "\n"))
+				return
+			}
+			conn.Write([]byte("OK\n"))
+		case "GET":
+			val, err := handleGET(c, input)
+			if err != nil {
+				conn.Write([]byte("Error while retrieving data. " + err.Error() + "\n"))
+				return
+			}
+			conn.Write(val)
+		case "DEL":
+			if err := handleDELETE(c, input); err != nil {
+				conn.Write([]byte("Error while deleting data. " + err.Error() + ""))
+				return
+			}
+			conn.Write([]byte("OK"))
+		case "EXISTS":
+			val, err := handleEXISTS(c, input)
+			if err != nil {
+				conn.Write([]byte("Error while checking key exists. " + err.Error() + ""))
+				return
+			}
+			conn.Write(val)
+		default:
+			// TODO: log
+			conn.Write([]byte("Error: Unsupported Command."))
+		}
+	}
 }
 
 // handleSET handles the 'SET' command
@@ -108,4 +121,15 @@ func handleDELETE(c *Cache, input []byte) error {
 	key := string(input)
 
 	return c.Delete(key)
+}
+
+func handleEXISTS(c *Cache, input []byte) ([]byte, error) {
+	// TODO: sanitize input
+	key := string(input)
+
+	if c.Exists(key) {
+		return []byte("TRUE"), nil
+	}
+
+	return []byte("FALSE"), nil
 }
