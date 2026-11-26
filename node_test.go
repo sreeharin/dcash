@@ -6,10 +6,8 @@ import (
 	"testing"
 )
 
-const addr = "localhost:6368"
-
 // startServer starts the cache store, and the server
-func startServer(t *testing.T) *Cache {
+func startServer(t *testing.T) (*Cache, net.Addr) {
 	t.Helper()
 
 	cache := NewCache()
@@ -19,13 +17,13 @@ func startServer(t *testing.T) *Cache {
 		l.Close()
 	})
 
-	return cache
+	return cache, l.Addr()
 }
 
-func connect(t *testing.T) net.Conn {
+func connect(t *testing.T, addr net.Addr) net.Conn {
 	t.Helper()
 
-	conn, err := net.Dial("tcp", addr)
+	conn, err := net.Dial("tcp", addr.String())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,14 +57,13 @@ func send(t *testing.T, conn net.Conn, data []byte) error {
 }
 
 func TestSETCmd(t *testing.T) {
-	cache := startServer(t)
+	cache, addr := startServer(t)
 
 	// Connect to server
-	conn := connect(t)
+	conn := connect(t, addr)
 
 	// Send SET key value
-	// _, err := conn.Write([]byte("SET name \"John Doe\""))
-	err := send(t, conn, []byte("SET name \"John Doe\""))
+	err := send(t, conn, []byte("SET name \"John Doe\"\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +73,7 @@ func TestSETCmd(t *testing.T) {
 		t.Fatal("Error while reading from server. ", err)
 	}
 
-	expectedReply := "OK"
+	expectedReply := "OK\n"
 	if string(buffer) != expectedReply {
 		t.Errorf("Unexpected reply from server. Expected: %q, Got: %q", expectedReply, buffer)
 	}
@@ -89,17 +86,17 @@ func TestSETCmd(t *testing.T) {
 }
 
 func TestGetCmd(t *testing.T) {
-	cache := startServer(t)
+	cache, addr := startServer(t)
 
 	KEY := "location"
 	VAL := "Vice city"
 
 	cache.Set(KEY, []byte(VAL))
 
-	conn := connect(t)
+	conn := connect(t, addr)
 
 	// send GET cmd
-	_, err := fmt.Fprintf(conn, "GET %s", KEY)
+	_, err := fmt.Fprintf(conn, "GET %s\n", KEY)
 	if err != nil {
 		t.Error("Failed to send GET cmd to server. ", err)
 	}
@@ -115,16 +112,16 @@ func TestGetCmd(t *testing.T) {
 }
 
 func TestDeleteCmd(t *testing.T) {
-	cache := startServer(t)
+	cache, addr := startServer(t)
 
 	KEY := "location"
 	VAL := "Vice city"
 
 	cache.Set(KEY, []byte(VAL))
 
-	conn := connect(t)
+	conn := connect(t, addr)
 
-	_, err := fmt.Fprintf(conn, "DEL %s", KEY)
+	_, err := fmt.Fprintf(conn, "DEL %s\n", KEY)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,14 +137,14 @@ func TestDeleteCmd(t *testing.T) {
 }
 
 func TestExistsCmd(t *testing.T) {
-	cache := startServer(t)
+	cache, addr := startServer(t)
 	cache.Set("user:100", []byte("John"))
 
-	conn := connect(t)
+	conn := connect(t, addr)
 
 	// check for user:100
 	// should return TRUE
-	if err := send(t, conn, []byte("EXISTS user:100")); err != nil {
+	if err := send(t, conn, []byte("EXISTS user:100\n")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -163,7 +160,7 @@ func TestExistsCmd(t *testing.T) {
 	// check for user:200
 	// should return FALSE
 
-	if err := send(t, conn, []byte("EXISTS user:200")); err != nil {
+	if err := send(t, conn, []byte("EXISTS user:200\n")); err != nil {
 		t.Fatal(err)
 	}
 

@@ -1,17 +1,18 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
-	"io"
 	"log"
 	"net"
+	"time"
 )
 
 // Start is the entrypoint of node module
 // It runs the server
 func Start(c *Cache) net.Listener {
-	l, err := net.Listen("tcp", "localhost:6368")
+	l, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -20,12 +21,9 @@ func Start(c *Cache) net.Listener {
 		for {
 			conn, err := l.Accept()
 			if err != nil {
-				if errors.Is(err, net.ErrClosed) {
-					return
-				}
 				// TODO: fix logging
-				log.Print(err)
-				continue
+				// log.Print(err)
+				return
 			}
 
 			go handleConn(c, conn)
@@ -36,27 +34,26 @@ func Start(c *Cache) net.Listener {
 }
 
 // handleConn is used to handle the commands send by the client
-// TODO: Get rid of '\n'
 func handleConn(c *Cache, conn net.Conn) {
 	defer conn.Close()
 
-	maxSize := 1024
-	buffer := make([]byte, maxSize)
+	reader := bufio.NewReader(conn)
 
 	for {
-		n, err := conn.Read(buffer)
-
-		if err != nil {
-			// close the connection
-			if errors.Is(err, io.EOF) {
-				return
-			}
-
-			// TODO: fix logging
-			log.Print(err)
+		if err := conn.SetDeadline(time.Now().Add(1 * time.Second)); err != nil {
+			// TODO: log
+			return
 		}
 
-		command, input, found := bytes.Cut(buffer[:n], []byte(" "))
+		buffer, err := reader.ReadBytes('\n')
+		if err != nil {
+			// log.Print(err)
+			return
+		}
+
+		buffer = bytes.TrimRight(buffer, "\r\n")
+
+		command, input, found := bytes.Cut(buffer, []byte(" "))
 		if !found {
 			return
 		}
@@ -67,7 +64,7 @@ func handleConn(c *Cache, conn net.Conn) {
 				conn.Write([]byte("Error while storing data. " + err.Error() + "\n"))
 				return
 			}
-			conn.Write([]byte("OK"))
+			conn.Write([]byte("OK\n"))
 		case "GET":
 			val, err := handleGET(c, input)
 			if err != nil {

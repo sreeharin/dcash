@@ -24,12 +24,15 @@ func (c *Cache) Set(key string, value []byte) error {
 }
 
 func (c *Cache) Get(key string) ([]byte, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
 	val, exists := c.entries[key]
 	if !exists {
 		return nil, errors.New("KEY doesn't exists.")
 	}
 
-	return val, nil
+	return slices.Clone(val), nil
 }
 
 func (c *Cache) Exists(key string) bool {
@@ -41,12 +44,10 @@ func (c *Cache) Exists(key string) bool {
 }
 
 func (c *Cache) Delete(key string) error {
-	if c.Exists(key) {
-		c.mu.Lock()
-		delete(c.entries, key)
-		c.mu.Unlock()
-		return nil
-	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	delete(c.entries, key)
 
 	return errors.New("KEY doesn't exists.")
 }
