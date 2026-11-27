@@ -85,6 +85,18 @@ func TestSETCmd(t *testing.T) {
 	// TODO: compare results
 }
 
+func TestSETWithTTLCmd(t *testing.T) {
+	// SET user:1001 "Anjooran" EX 2
+
+	// check if "user:1001" exists at T + 1 sec
+	// should return true
+
+	// check if "user:1001" exists at T + 3 sec
+	// should return false
+
+	t.Fail()
+}
+
 func TestGetCmd(t *testing.T) {
 	cache, addr := startServer(t)
 
