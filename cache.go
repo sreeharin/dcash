@@ -2,32 +2,68 @@ package main
 
 import (
 	"errors"
+	"hash/fnv"
+	"log"
 	"slices"
 	"sync"
 )
 
 type Cache struct {
+	shards []*shard
+
+	// shardCount is the number of shards
+	shardCount int
+}
+
+type shard struct {
 	mu      sync.RWMutex
 	entries map[string][]byte
 }
 
+// NewCache creates a map with 'shardCount' shards
 func NewCache() *Cache {
-	return &Cache{entries: make(map[string][]byte)}
+	// TODO: accept user input for shardCount
+	shardCount := 64
+	shards := make([]*shard, shardCount)
+
+	for i := range shardCount {
+		shards[i] = &shard{
+			entries: make(map[string][]byte),
+		}
+	}
+
+	return &Cache{shards: shards, shardCount: shardCount}
+}
+
+func (c *Cache) getShard(key string) *shard {
+	hash := fnv.New32()
+	_, err := hash.Write([]byte(key))
+
+	if err != nil {
+		log.Fatal("Error while writing hash. ", err)
+	}
+
+	idx := int(hash.Sum32()) % c.shardCount
+	return c.shards[idx]
 }
 
 func (c *Cache) Set(key string, value []byte) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	shard := c.getShard(key)
 
-	c.entries[key] = slices.Clone(value)
+	shard.mu.Lock()
+	defer shard.mu.Unlock()
+
+	shard.entries[key] = slices.Clone(value)
 	return nil
 }
 
 func (c *Cache) Get(key string) ([]byte, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	shard := c.getShard(key)
 
-	val, exists := c.entries[key]
+	shard.mu.RLock()
+	defer shard.mu.RUnlock()
+
+	val, exists := shard.entries[key]
 	if !exists {
 		return nil, errors.New("KEY doesn't exists.")
 	}
@@ -36,18 +72,22 @@ func (c *Cache) Get(key string) ([]byte, error) {
 }
 
 func (c *Cache) Exists(key string) bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	shard := c.getShard(key)
 
-	_, exists := c.entries[key]
+	shard.mu.RLock()
+	defer shard.mu.RUnlock()
+
+	_, exists := shard.entries[key]
 	return exists
 }
 
 func (c *Cache) Delete(key string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	shard := c.getShard(key)
 
-	delete(c.entries, key)
+	shard.mu.Lock()
+	defer shard.mu.Unlock()
+
+	delete(shard.entries, key)
 
 	return errors.New("KEY doesn't exists.")
 }
