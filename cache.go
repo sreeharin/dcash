@@ -6,7 +6,10 @@ import (
 	"log"
 	"slices"
 	"sync"
+	"time"
 )
+
+var ErrKeyDoesntExists = errors.New("KEY doesn't exists.")
 
 type Cache struct {
 	shards []*shard
@@ -15,9 +18,21 @@ type Cache struct {
 	shardCount int
 }
 
+type entry struct {
+	value []byte
+
+	// 0 means no expiry
+	expiriesAt int64
+}
+
+func (e entry) isExpired() bool {
+	now := time.Now().UnixNano()
+	return e.expiriesAt > 0 && now >= e.expiriesAt
+}
+
 type shard struct {
 	mu      sync.RWMutex
-	entries map[string][]byte
+	entries map[string]entry
 }
 
 // NewCache creates a map with 'shardCount' shards
@@ -28,13 +43,15 @@ func NewCache() *Cache {
 
 	for i := range shardCount {
 		shards[i] = &shard{
-			entries: make(map[string][]byte),
+			entries: make(map[string]entry),
 		}
 	}
 
 	return &Cache{shards: shards, shardCount: shardCount}
 }
 
+// getShard is used to find the shard to store the key:value
+// it uses the 'key' string to find which shard to store to
 func (c *Cache) getShard(key string) *shard {
 	hash := fnv.New32()
 	_, err := hash.Write([]byte(key))
@@ -47,47 +64,85 @@ func (c *Cache) getShard(key string) *shard {
 	return c.shards[idx]
 }
 
-func (c *Cache) Set(key string, value []byte) error {
+// Set stores the key:value to a shard
+func (c *Cache) Set(key string, value []byte, expiresAt int64) error {
 	shard := c.getShard(key)
 
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
 
-	shard.entries[key] = slices.Clone(value)
+	shard.entries[key] = entry{value: value, expiriesAt: expiresAt}
 	return nil
 }
 
+// Get fetches 'value' for 'key'
+// if key is expired, it gets deleted and nil is returned
 func (c *Cache) Get(key string) ([]byte, error) {
 	shard := c.getShard(key)
 
 	shard.mu.RLock()
-	defer shard.mu.RUnlock()
+	// defer shard.mu.RUnlock()
 
-	val, exists := shard.entries[key]
+	entry, exists := shard.entries[key]
 	if !exists {
-		return nil, errors.New("KEY doesn't exists.")
+		shard.mu.RUnlock()
+		return nil, ErrKeyDoesntExists
 	}
 
-	return slices.Clone(val), nil
+	// check if entry is expired
+	// delete entry if expired
+	if entry.isExpired() {
+		shard.mu.RUnlock()
+
+		shard.mu.Lock()
+		delete(shard.entries, key)
+		shard.mu.Unlock()
+
+		return nil, ErrKeyDoesntExists
+	}
+
+	shard.mu.RUnlock()
+
+	return slices.Clone(entry.value), nil
 }
 
+// Exists checks whether 'value' exists for 'key'
 func (c *Cache) Exists(key string) bool {
 	shard := c.getShard(key)
 
 	shard.mu.RLock()
-	defer shard.mu.RUnlock()
 
 	_, exists := shard.entries[key]
+
+	// check for expiry
+	// delete entry if expired
+	if exists && shard.entries[key].isExpired() {
+		shard.mu.RUnlock()
+
+		shard.mu.Lock()
+		delete(shard.entries, key)
+		shard.mu.Unlock()
+
+		return false
+	}
+
+	shard.mu.RUnlock()
+
 	return exists
 }
 
+// Delete a 'key:value' pair
 func (c *Cache) Delete(key string) error {
 	shard := c.getShard(key)
 
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
 
-	delete(shard.entries, key)
+	if _, exists := shard.entries[key]; exists {
+		delete(shard.entries, key)
 
-	return errors.New("KEY doesn't exists.")
+		return nil
+	}
+
+	return ErrKeyDoesntExists
 }
